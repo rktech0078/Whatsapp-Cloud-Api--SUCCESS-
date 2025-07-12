@@ -162,7 +162,9 @@ def keep_alive():
         time.sleep(300)  # 5 minutes
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5000))
+    port_env = os.getenv('PORT')
+    port = int(port_env) if port_env and port_env.isdigit() else 5000
+
     # Start self-ping thread
     threading.Thread(target=keep_alive, daemon=True).start()
     # Run Flask app
