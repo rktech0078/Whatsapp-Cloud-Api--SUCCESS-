@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+import threading
+import time
 from flask import Flask, request, jsonify
 import google.generativeai as genai
 import requests
@@ -18,6 +20,7 @@ WHATSAPP_TOKEN = os.getenv('WHATSAPP_TOKEN')  # Your permanent token
 PHONE_NUMBER_ID = os.getenv('PHONE_NUMBER_ID')  # WhatsApp Cloud API phone number ID
 VERIFY_TOKEN = os.getenv('VERIFY_TOKEN')  # Token you define and also set in Meta dashboard
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+SELF_URL = os.getenv('SELF_URL')  # Your Render URL (e.g. https://your-app.onrender.com)
 
 # Google Gemini setup
 genai.configure(api_key=GOOGLE_API_KEY)
@@ -92,7 +95,6 @@ ai_agent = WhatsAppAIAgent()
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'GET':
-        # Webhook verification challenge from Meta
         mode = request.args.get('hub.mode')
         token = request.args.get('hub.verify_token')
         challenge = request.args.get('hub.challenge')
@@ -144,6 +146,24 @@ def webhook():
 def health():
     return jsonify(status="healthy")
 
+# Self-ping thread to prevent sleep
+
+def keep_alive():
+    if not SELF_URL:
+        logger.warning("SELF_URL not set. Skipping keep-alive pinger.")
+        return
+    while True:
+        try:
+            logger.info("Sending keep-alive ping to /health")
+            res = requests.get(f"{SELF_URL}/health")
+            logger.info(f"Keep-alive response: {res.status_code}")
+        except Exception as e:
+            logger.error(f"Keep-alive ping failed: {e}")
+        time.sleep(300)  # 5 minutes
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
+    # Start self-ping thread
+    threading.Thread(target=keep_alive, daemon=True).start()
+    # Run Flask app
     app.run(host='0.0.0.0', port=port, debug=True)
